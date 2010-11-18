@@ -2,3 +2,6 @@ Revision history for Whatever
 
 0.10    2010.11.12
         all i see are stars
+
+0.21    2010.11.18
+        bugfixes, stars are coderefs, array/hash deref, lvalues
