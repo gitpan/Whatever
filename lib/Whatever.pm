@@ -2,7 +2,8 @@ package Whatever;
     use warnings;
     use strict;
     use Carp ();
-    sub new {
+
+    sub star (&) {
         my $code = shift;
         bless sub :lvalue {
             goto &$code if @_ < 2;
@@ -21,7 +22,7 @@ package Whatever;
                 $_ => sub {
                     my ($self, $flip) = @_[0, 2];
                     my $arg2 = \$_[1];
-                    new sub {
+                    star {
                         $code->($flip ? ($$arg2, &$self)
                                       : (&$self, $$arg2))
                     }
@@ -34,7 +35,7 @@ package Whatever;
                 my $code = eval "sub {$_ \$_[0]}" or die $@;
                 ($_ eq '-' ? 'neg' : $_) => sub {
                     my $self = $_[0];
-                    new sub {$code->(&$self)}
+                    star {$code->(&$self)}
                 }
             } qw (- ! ~)
         ),
@@ -43,33 +44,50 @@ package Whatever;
                 my $code = eval "sub {$_(\$_[0])}" or die $@;
                 $_ => sub {
                     my $self = $_[0];
-                    new sub {$code->(&$self)}
+                    star {$code->(&$self)}
                 }
             } qw (cos sin exp abs log sqrt)
         ),
         '@{}' => sub {tie my @ret => 'Whatever::ARRAY', shift; \@ret},
         '%{}' => sub {tie my %ret => 'Whatever::HASH',  shift; \%ret};
 
-    ** = sub :lvalue {my $x = new sub :lvalue {@_ ? $_[0] : $_}};
-    *@ = sub {new sub :lvalue {$_[0]}};
-    *_ = sub {new sub :lvalue {$_}};
-    ** = \do{&*};
-    eval {Internals::SvREADONLY($*, 1); 1}
+    {
+        my $star = star sub :lvalue {@_ ? $_[0] : $_};
+        my $arg  = star sub :lvalue {$_[0]};
+        my $it   = star sub :lvalue {$_};
+        ** = sub :lvalue {my $x = $star};
+        *@ = sub {$arg};
+        *_ = sub {$it};
+        ** = \$star;
+    }
+    eval {Internals::SvREADONLY($*, 1)}
         or warn 'Whatever could not set $* readonly: '.$@;
 
-    sub DESTROY {}
+    my $av_push = eval {
+        require Array::RefElem;
+        \&Array::RefElem::av_push
+    };
     sub AUTOLOAD {
         my $self = shift;
         my $args = \@_;
         my $method = substr our $AUTOLOAD, 2 + length __PACKAGE__;
-        new sub {(&$self)->$method(@$args)}
-    }
+        star {
+            if ($av_push) {
+                $av_push->(\@_, $_)
+                    for scalar &$self, @$args, @_ = ();
+            } else {
+                @_ = (scalar &$self, @$args)
+            }
+            goto &{$_[0]->can($method)}
+        }
+    } sub DESTROY {}
+
     {package
         Whatever::ARRAY;
         sub TIEARRAY {bless \\pop}
         sub FETCH {
             my ($self, $key) = @_;
-            Whatever::new sub :lvalue {
+            Whatever::star sub :lvalue {
                 (&$$$self ||= [])->[$key - ($key > 2**30 and 2**31-1)]
             }
         }
@@ -82,13 +100,13 @@ package Whatever;
         sub TIEHASH {bless \\pop}
         sub FETCH {
             my ($self, $key) = @_;
-            Whatever::new sub :lvalue {(&$$$self ||= {})->{$key}}
+            Whatever::star sub :lvalue {(&$$$self ||= {})->{$key}}
         }
         sub AUTOLOAD {Carp::croak our $AUTOLOAD . " unsupported"}
         sub DESTROY {}
     }
-    delete $Whatever::{new};
-    our $VERSION = '0.21';
+    delete $Whatever::{star};
+    our $VERSION = '0.22';
 
 =head1 NAME
 
@@ -96,7 +114,7 @@ Whatever - a perl6ish whatever-star for perl5
 
 =head1 VERSION
 
-Version 0.21
+Version 0.22
 
 =head1 SYNOPSIS
 
@@ -133,6 +151,7 @@ packages after this module is loaded.
 the C< &* > and C< $* > stars are the most generic terms, which return their
 expression as a coderef that will take its argument from C< $_[0] > if it is
 available, or C< $_ > otherwise. this allows the terms to dwim in most contexts.
+think of the whatever star as C< sub {@_ ? $_[0] : $_} >
 
 the C< &@ > term always uses C< $_[0]>, while the C< &_ > always uses C< $_ >
 
@@ -175,7 +194,7 @@ a few more examples are probably in order:
 assuming this simple C< Array > implementation:
 
     {package Array;
-        sub new  {bless \@_, shift}
+        sub new  {shift; bless [@_]}
         sub map  {new Array map  $_[1]() => @{$_[0]}}
         sub grep {new Array grep $_[1]() => @{$_[0]}}
         sub str  {join ' ' => @{$_[0]}}
@@ -196,6 +215,10 @@ assuming this simple C< Array > implementation:
     say $multi_call->($array); # prints '3 7 9 11 13 17 19 21'
 
     $some_obj->map(&*->some_method(...));
+
+arguments of method calls are copied by alias if L<Array::RefElem> is installed.
+this provides closure like behavior.  otherwise, the values are fixed to
+whatever they where at the time of declaration.
 
 =item multiple whatever stars
 
@@ -244,7 +267,6 @@ analogous to an anonymous sub closing over a variable
 
     $future = &*;
     say $delorean->('folks')->("that's all");  # prints "that's all folks!"
-
 
 =back
 

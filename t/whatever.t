@@ -1,6 +1,6 @@
 use strict;
 use warnings;
-use Test::Magic tests => 121;
+use Test::Magic tests => 123;
 use lib '../lib';
 use Whatever;
 
@@ -74,7 +74,7 @@ test 'lazy arg',
                             eq "that's all folks"};
 
 {package Array;
-    sub new  {bless \@_, shift}
+    sub new  {shift; bless [@_]}
     sub map  {new Array map  $_[1]() => @{$_[0]}}
     sub grep {new Array grep $_[1]() => @{$_[0]}}
     sub join {join $_[1]||'' => @{$_[0]}}
@@ -351,5 +351,14 @@ test 'hash deep', do {
 test 'array/hash deep', do {
   &*->[0]{a}[1][2]{b}{c}(my $data) = 42;
   is $$data[0]{a}[1][2]{b}{c} == 42
-}
+};
 
+test 'array unsupported op', do {
+    eval {push @{&*}, 5};
+    is $@ == qr/^Whatever::ARRAY::PUSH unsupported/;
+};
+
+test 'hash unsupported op', do {
+    eval {my @keys = keys %{&*}};
+    is $@ == qr/^Whatever::HASH::FIRSTKEY unsupported/;
+};

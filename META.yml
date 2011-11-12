@@ -16,7 +16,7 @@ name: Whatever
 provides:
   Whatever:
     file: lib/Whatever.pm
-    version: 0.21
+    version: 0.22
 resources:
   license: http://dev.perl.org/licenses/
-version: 0.21
+version: 0.22
