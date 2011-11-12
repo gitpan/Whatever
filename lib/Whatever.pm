@@ -106,7 +106,7 @@ package Whatever;
         sub DESTROY {}
     }
     delete $Whatever::{star};
-    our $VERSION = '0.22';
+    our $VERSION = '0.23';
 
 =head1 NAME
 
@@ -114,7 +114,7 @@ Whatever - a perl6ish whatever-star for perl5
 
 =head1 VERSION
 
-Version 0.22
+Version 0.23
 
 =head1 SYNOPSIS
 
@@ -218,7 +218,7 @@ assuming this simple C< Array > implementation:
 
 arguments of method calls are copied by alias if L<Array::RefElem> is installed.
 this provides closure like behavior.  otherwise, the values are fixed to
-whatever they where at the time of declaration.
+whatever they were at the time of declaration.
 
 =item multiple whatever stars
 
